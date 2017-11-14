@@ -1,6 +1,7 @@
 ## This script will grab data from Wisconsin 511 API and output to ArcGIS REST End Feature Service.
 ## Developed by Kayne Neigherbauer for Wisconsin Emergency Management
 
+
 #import modules
 try:
     import sys, urllib, urllib2, json, time, string, logging, datetime, os, socket
@@ -50,6 +51,7 @@ def main():
         except urllib2.URLError as e: #url error exception handling
             print "URL Error Code: " + str(e.reason)
             logging.exception('deleteData - URLError: %s' + '\n', e.reason)
+            
         else:
             #read response data
             response = json.load(webUrl)
@@ -90,9 +92,7 @@ def main():
             else:
                 print "Unknown Error, response from data feed: " + json.dumps(response) +"\n" + json.dumps(data, indent=2, separators=(',', ': '))
 
-
-
-            
+      
     #winter road conditions 
     def postWinterDriving(url):
         #delete old data
@@ -106,22 +106,26 @@ def main():
             for i in range(0,len(data)):
                 paths = []
                 for point in data[i].get("SegmentCoordinates"):
-                    paths.append([point.get("Longitude") , point.get("Latitude")])
+                    paths.append([round(point.get("Longitude"),5) , round(point.get("Latitude"),5)])
                 attributes = data[i].copy()
+                attributes["LocationDescription"] = attributes.get("LocationDescription").replace("/","-")
                 try:
                     del attributes["SegmentCoordinates"]
+                    #del attributes["Region"]
+                    del attributes["StartCounty"]
                 except KeyError:
                     print "KeyError - winter driving processing"
-                    pass
-                newFeat = {"geometry": {"paths": [paths], "spatialReference" : {"wkid" : 4326}} , "attributes" : attributes}
+                    logging.debug("KeyError - postWinterDriving")
+                newFeat = [{"geometry": {"paths": [paths], "spatialReference" : {"wkid" : 4326}} , "attributes" : attributes}]
                 #add newly formatted data item to new geojson
                 newGJSON.append(newFeat)
         #if new data was created, post it to WEM feature service
         if newGJSON:
-            postData(newGJSON,url)        
+            for feature in newGJSON:
+                postData(feature,url)
+           # postData(newGJSON,url)        
                 
 
-     
     #function for getEvents feed
     def postEvents(url):
         #delete old data 
@@ -144,63 +148,22 @@ def main():
             #if new data was created, post it to WEM feature service
             if newGJSON:
                 postData(newGJSON,url)
-
-
-
-    #function to fetch token for arcgis server access
-    def getToken():
-        ### change credentials ###
-        params = {"username":"",
-                  "password":"",
-                  "client":"",
-                  "f":"json",
-                  "expiration":"60"}
-        # url for token generation on our server
-        tokenUrl = ""
-
-        try:
-            req = urllib2.Request(tokenUrl, urllib.urlencode(params))
-            webUrl = urllib2.urlopen(req)
-        except urllib2.HTTPError as e:
-            print "HTTP Error: " + str(e.code)
-            logging.exception("getToken HTTP Error: " + str(e.code))
-        except urllib2.URLError as e:            
-            print "URL Error: " + str(e.reason)
-            logging.exception("getToken URL Error Code: " + str(e.reason))
-        else:
-            response = json.load(webUrl)
-            print response
-            if "token" in response:
-                print "Getting new token..."
-                #get values of token and token lifespan
-                token = response.get("token")
-                return token            
-            else:
-                if "error" in response:
-                    print str(response["error"].get("message"))
-                    logging.error("getToken Error:", response["error"].get("message"))
-            
-                return None, 0
-                    
-
+                
 
     #function to define variables and start timing for repeating the data retrieval
-    def timed_func(token):
-            #### Keys ####
-            #511 api key 
-            key = ''
-            legacy_key = ''                        
+    def timed_func(token, key, legacy_key):
+                                    
             #data format requested 'xml' or 'json'
             dataFormat = 'json'
             #### URLs ####
             #urls for winter driving conditions (511, our rest end delete, our rest end add)
             winterDrivingUrl = ('https://511wi.gov/web/api/winterroadconditions?key=' + legacy_key + '&format=' + dataFormat,
-                                'https://*********************' + token,
-                                'https://*********************' + token)
+                                'https://********/FeatureServer/0/deleteFeatures?token=' + token,
+                                'https://********/FeatureServer/0/addFeatures?token=' + token)
             #url for getEvents feed
             eventsUrl = ('https://511wi.gov/api/getevents?key=' + key + '&format=' + dataFormat,
-                         'https://***************' + token,
-                         'https://***************' + token)
+                         'https://*****************/FeatureServer/0/deleteFeatures?token=' + token,
+                         'https://****************/FeatureServer/0/addFeatures?token=' + token)
           
             #counter for successful items added
             global successCount
@@ -223,8 +186,13 @@ def main():
     timeout = 30
     socket.setdefaulttimeout(timeout)
     #get a token from arcgis server
-    token = getToken()
-    timed_func(token)
+    token = sys.argv[1]
+    #### Keys ####
+    #511 api keys 
+    key = '$$$$$$$$$$$$$$$$$$'
+    legacy_key = '$$$$$$$$$$$$$'
+    
+    timed_func(token, key, legacy_key)
         
              
 
