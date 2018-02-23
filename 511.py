@@ -133,6 +133,10 @@ def main():
                     newFeat = {"geometry":{"x": data[i].get("Longitude"), "y": data[i].get("Latitude"), "spatialReference" : {"WKID": 4326}},"attributes": data[i].copy()}
                     #capitalize the event type
                     newFeat["attributes"]["EventSubType"] = string.capwords(newFeat["attributes"].get("EventSubType"))
+                    if newFeat["attributes"]["Description"] != None:
+                        newFeat["attributes"]["Description"] = '{0}:\n{1}'.format(newFeat["attributes"]["EventSubType"], newFeat["attributes"]["Description"])
+                    else:
+                        newFeat["attributes"]["Description"] = '{0}'.format(newFeat["attributes"]["EventSubType"])
                     #add newly formatted data item to new geojson
                     newGJSON.append(newFeat)
                 else: pass
