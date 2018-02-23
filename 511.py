@@ -124,6 +124,12 @@ def main():
         if data:
             for i in range(0,len(data)):
                 if data[i].get("EventType") in eventTypes:
+                    #format the dates correctly for webeoc
+                    for date in ["Reported", "LastUpdated", "StartDate"]:
+                        oldDate = time.strptime(data[i].get(date), "%d/%m/%Y %H:%M:%S")
+                        newDate = time.strftime("%m/%d/%Y %H:%M:%S",oldDate)
+                        data[i][date] = newDate
+                    #create new feature formatting and assign values
                     newFeat = {"geometry":{"x": data[i].get("Longitude"), "y": data[i].get("Latitude"), "spatialReference" : {"WKID": 4326}},"attributes": data[i].copy()}
                     #capitalize the event type
                     newFeat["attributes"]["EventSubType"] = string.capwords(newFeat["attributes"].get("EventSubType"))
@@ -137,18 +143,15 @@ def main():
 
     #function to define variables and start timing for repeating the data retrieval
     def timed_func(token, key, legacy_key):
-                                    
-        #data format requested 'xml' or 'json'
-        dataFormat = 'json'
         #### URLs ####
         #urls for winter driving conditions (511, our rest end delete, our rest end add)
-        winterDrivingUrl = ('https://511wi.gov/web/api/winterroadconditions?key=' + legacy_key + '&format=' + dataFormat,
-                            'https://___________________/511_Winter_Road_Conditions/FeatureServer/0/deleteFeatures?token=' + token,
-                            'https://___________________/511_Winter_Road_Conditions/FeatureServer/0/addFeatures?token=' + token)
+        winterDrivingUrl = ('https://511wi.gov/web/api/winterroadconditions?key=' + legacy_key + '&format=json',
+                            'https://widmamaps.us/dma/rest/services/WEM_Private/511_Winter_Road_Conditions/FeatureServer/0/deleteFeatures?token=' + token,
+                            'https://widmamaps.us/dma/rest/services/WEM_Private/511_Winter_Road_Conditions/FeatureServer/0/addFeatures?token=' + token)
         #url for getEvents feed
-        eventsUrl = ('https://511wi.gov/api/getevents?key=' + key + '&format=' + dataFormat,
-                     'https://___________________511_Event_Incidents/FeatureServer/0/deleteFeatures?token=' + token,
-                     'https://___________________511_Event_Incidents/FeatureServer/0/addFeatures?token=' + token)
+        eventsUrl = ('https://511wi.gov/api/getevents?key=' + key + '&format=json',
+                     'https://widmamaps.us/dma/rest/services/WEM_Private/511_Event_Incidents/FeatureServer/0/deleteFeatures?token=' + token,
+                     'https://widmamaps.us/dma/rest/services/WEM_Private/511_Event_Incidents/FeatureServer/0/addFeatures?token=' + token)
       
         #counter for successful items added
         global successCount
