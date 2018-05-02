@@ -9,6 +9,7 @@ except ImportError:
     sys.exit("Error importing 1 or more required modules")
 
 
+
 def main():
     
     #function to retrieve data from urls  
@@ -27,19 +28,19 @@ def main():
                 try:
                     data = json.load(webUrl)
                 except ValueError as e:
-                    my_logger.exception('getData Error:'+ str(e))
-                if data == []: data = None
+                    my_logger.exception('getData Error:' + str(e))
                 return data
             else:
-                if "ErrorCode" in response:
-                    my_logger.error(repsonse["ErrorCode"].get("Msg"))
+                data = json.load(webUrl)
+                if "ErrorCode" in data:
+                    my_logger.error(data["ErrorCode"].get("Msg"))
                 return None
         
 
     #function deletes old data on our end first, before adding up-to-date data
     def deleteData(url):
         try: #request to server
-            req = urllib2.Request(url[1],'f=json&where=objectid <> 0')
+            req = urllib2.Request(url[1],'f=json&where=ID>0')
             webUrl = urllib2.urlopen(req)
         except urllib2.HTTPError as e:
             my_logger.exception('deleteData HTTPError: Code' + str(e.code))
@@ -59,25 +60,31 @@ def main():
         #send the new data 
         try:
             req = urllib2.Request(url[2],'f=json&features=' + json.dumps(data, separators=(',', ': ')))
-            webUrl = urllib2.urlopen(req)
+            web_url = urllib2.urlopen(req)
         except urllib2.HTTPError as e:
-            my_logger.exception('postData HTTPError:' + str(e.code))
+            my_logger.info('postData HTTPError:' + str(e.code))
         except urllib2.URLError as e:            
-            my_logger.exception('postData URLError:' + str(e.reason))
+            my_logger.info('postData URLError:' + str(e.reason))
         else: #load response data and report
-            response = json.load(webUrl)
+            response = json.load(web_url)
             if response.get("addResults"):
                 for item in response.get("addResults"):
-                    if item.get("success") == True:
+                    if item.get("success") is True:
                         global successCount
                         successCount += 1
             elif response.get("error"):
                 if response["error"]["details"]:
-                    my_logger.error("Error adding features -" + response["error"].get("message"),response["error"]["details"][0])
+                    my_logger.error("Error adding features -" + response["error"].get("message"),response["error"].get("details")[0])
                 elif response["error"]["message"]:
                     my_logger.error('Error adding features -' + response["error"].get("message"))
             else:
                 my_logger.error("Unknown Error")
+
+
+    #dump last request data to log file for debugging help
+    def writeFile(filename, data):
+        with open(filename, "w") as f:
+            json.dump(data, f)
 
       
     #winter road conditions 
@@ -90,22 +97,23 @@ def main():
         newGJSON = []
         #parse and format data correctly for ESRI JSON specs
         if data:
-            for i in range(0,len(data)):
+            for i in range(0, len(data)):
                 paths = []
                 for point in data[i].get("SegmentCoordinates"):
-                    paths.append([round(point.get("Longitude"),5) , round(point.get("Latitude"),5)])
+                    paths.append([round(point.get("Longitude"), 5), round(point.get("Latitude"), 5)])
                 attributes = data[i].copy()
-                attributes["LocationDescription"] = attributes.get("LocationDescription").replace("/","-")
+                attributes["LocationDescription"] = attributes.get("LocationDescription").replace("/", "-")
                 try:
                     del attributes["SegmentCoordinates"]
                     del attributes["StartCounty"]
                 except KeyError:
                     my_logger.exception("KeyError - postWinterDriving")
-                newFeat = [{"geometry": {"paths": [paths], "spatialReference" : {"wkid" : 4326}} , "attributes" : attributes}]
+                newFeat = [{"geometry": {"paths": [paths], "spatialReference": {"wkid": 4326}}, "attributes": attributes}]
                 #add newly formatted data item to new geojson
                 newGJSON.append(newFeat)
         #if new data was created, post it to WEM feature service
         if newGJSON:
+            writeFile("WinterDriving.log",newGJSON)
             for feature in newGJSON:
                 postData(feature,url)
        
@@ -129,11 +137,13 @@ def main():
                         oldDate = time.strptime(data[i].get(date), "%d/%m/%Y %H:%M:%S")
                         newDate = time.strftime("%m/%d/%Y %H:%M:%S",oldDate)
                         data[i][date] = newDate
+                    if "Severity" in data[i]:
+                        data[i]["Severity"] = None
                     #create new feature formatting and assign values
                     newFeat = {"geometry":{"x": data[i].get("Longitude"), "y": data[i].get("Latitude"), "spatialReference" : {"WKID": 4326}},"attributes": data[i].copy()}
                     #capitalize the event type
                     newFeat["attributes"]["EventSubType"] = string.capwords(newFeat["attributes"].get("EventSubType"))
-                    if newFeat["attributes"]["Description"] != None:
+                    if newFeat["attributes"]["Description"] is not None:
                         newFeat["attributes"]["Description"] = '{0}:\n{1}'.format(newFeat["attributes"]["EventSubType"], newFeat["attributes"]["Description"])
                     else:
                         newFeat["attributes"]["Description"] = '{0}'.format(newFeat["attributes"]["EventSubType"])
@@ -142,6 +152,7 @@ def main():
                 else: pass
             #if new data was created, post it to WEM feature service
             if newGJSON:
+                writeFile("Events.log",newGJSON)
                 postData(newGJSON,url)
                 
 
@@ -168,12 +179,11 @@ def main():
         my_logger.info(str(successCount) + " Features successfully added.")
         print log_time, str(successCount), "Features successfully added."
 
-                       
-   
-    #set a timeout for web requests via socket module
-    timeout = 10
+
+    # set a timeout for web requests via socket module
+    timeout = 20
     socket.setdefaulttimeout(timeout)
-    
+
     #set up a logger
     logFile = '511.log'
     my_logger = logging.getLogger()
@@ -193,9 +203,6 @@ def main():
     legacy_key = sys.argv[3]
     
     timed_func(token, key, legacy_key)
-        
-             
-
        
 if __name__ == "__main__":
     main()
