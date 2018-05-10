@@ -41,7 +41,7 @@ def main():
 
     #function deletes old data on our end first, before adding up-to-date data
     def deleteData(url, payload):
-        payload['where'] = "ID > '0'"
+        payload['where'] = "objectid > 0"
         try: #request to server
             r = requests.post(url, data=payload, timeout=10)
         except requests.HTTPError as e:
@@ -63,6 +63,7 @@ def main():
     #function to post the parsed data to the database
     def postData(data, url, payload):
         #send the new data
+        global successCount
         payload['features'] = data
         try:
             r = requests.post(url, data=payload, timeout=10)
@@ -78,8 +79,7 @@ def main():
                 response = r.json()
                 if response.get("addResults"):
                     for item in response.get("addResults"):
-                        if item.get("success") is True:
-                            global successCount
+                        if item.get("success"):
                             successCount += 1
                 elif response.get("error"):
                     if response["error"]["details"]:
@@ -145,8 +145,7 @@ def main():
                         oldDate = time.strptime(data[i].get(date), "%d/%m/%Y %H:%M:%S")
                         newDate = time.strftime("%m/%d/%Y %H:%M:%S",oldDate)
                         data[i][date] = newDate
-                    if "Severity" in data[i]:
-                        data[i]["Severity"] = 0
+
                     #create new feature formatting and assign values
                     newFeat = {"geometry":{"x": data[i].get("Longitude"), "y": data[i].get("Latitude"), "spatialReference" : {"WKID": 4326}},"attributes": data[i].copy()}
                     #capitalize the event type
@@ -185,13 +184,12 @@ def main():
                      'https://widmamaps.us/dma/rest/services/WEM_Private/511_Event_Incidents/FeatureServer/0/deleteFeatures',
                      'https://widmamaps.us/dma/rest/services/WEM_Private/511_Event_Incidents/FeatureServer/0/addFeatures')
       
-        #counter for successful items added
-        global successCount
-        successCount = 0
+
         #call each function with each url string as the argument
         postWinterDriving(winterDrivingUrl, payloads)
         postEvents(eventsUrl, payloads)
-        log_count(successCount)
+        my_logger.info(str(successCount) + " Features successfully added.")
+        print log_time, str(successCount), "Features successfully added."
 
 
     #set up a logger
@@ -211,7 +209,9 @@ def main():
     #511 api keys 
     key = sys.argv[2]
     legacy_key = sys.argv[3]
-    
+    # counter for successful items added
+    global successCount
+    successCount = 0
     timed_func(token, key, legacy_key)
        
 if __name__ == "__main__":
