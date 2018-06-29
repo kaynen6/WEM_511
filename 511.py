@@ -73,7 +73,7 @@ def main():
                         successCount += 1
             elif response.get("error"):
                 if response["error"]["details"]:
-                    my_logger.error("Error adding features -" + response["error"].get("message"),response["error"].get("details")[0])
+                    my_logger.error("Error adding features -" + response["error"].get("message")) #, response["error"].get("details")[0])
                 elif response["error"]["message"]:
                     my_logger.error('Error adding features -' + response["error"].get("message"))
             else:
@@ -154,18 +154,41 @@ def main():
                 writeFile("Events.log",newGJSON)
                 postData(newGJSON,url)
                 
+    def postMainlines(url):
+        #delete old data
+        deleteData(url)
+        #get new data from 511
+        data = getData(url)
+        newGJSON = []
+        if data:
+            for road in data:
+                #format json as esri likes
+                newFeat = {"geometry":{"paths":[],"spatialReference":{"wkid":4326}},"attributes": road}
+                segments = []
+                for seg in newFeat["attributes"].pop("SegmentCoordinates"):
+                    segment = [round(seg["Longitude"],5),round(seg["Latitude"],5)]
+                    segments.append(segment)
+                newFeat["geometry"]["paths"].append(segments)
+                newGJSON.append(newFeat)
+        postData(newGJSON,url)
+
+
 
     #function to define variables and start timing for repeating the data retrieval
     def timed_func(token, key, legacy_key):
         #### URLs ####
         #urls for winter driving conditions (511, our rest end delete, our rest end add)
-        winterDrivingUrl = ('https://511wi.gov/web/api/winterroadconditions?key=' + legacy_key + '&format=json',
+        winterDrivingUrl = ('https://511wi.gov/web/api/winterroadconditions?key={0}&format=json'.format(legacy_key),
                             'https://widmamaps.us/dma/rest/services/WEM_Private/511_Winter_Road_Conditions/FeatureServer/0/deleteFeatures?token=' + token,
                             'https://widmamaps.us/dma/rest/services/WEM_Private/511_Winter_Road_Conditions/FeatureServer/0/addFeatures?token=' + token)
         #url for getEvents feed
-        eventsUrl = ('https://511wi.gov/api/getevents?key=' + key + '&format=json',
+        eventsUrl = ('https://511wi.gov/api/getevents?key={0}&format=json'.format(key),
                      'https://widmamaps.us/dma/rest/services/WEM_Private/511_Event_Incidents/FeatureServer/0/deleteFeatures?token=' + token,
                      'https://widmamaps.us/dma/rest/services/WEM_Private/511_Event_Incidents/FeatureServer/0/addFeatures?token=' + token)
+
+        mainlineUrl = ('https://511wi.gov/web/api/MainlineLinks?key=' + legacy_key + '&format=json',
+                       'https://widmamaps.us/dma/rest/services/WEM_Private/511_MainlineLinks/FeatureServer/0/deleteFeatures?token=' + token,
+                       'https://widmamaps.us/dma/rest/services/WEM_Private/511_MainlineLinks/FeatureServer/0/addFeatures?token=' + token)
       
         #counter for successful items added
         global successCount
@@ -174,6 +197,7 @@ def main():
         #call each function with each url string as the argument
         postWinterDriving(winterDrivingUrl)
         postEvents(eventsUrl)
+        postMainlines(mainlineUrl)
 
         my_logger.info(str(successCount) + " Features successfully added.")
         print log_time, str(successCount), "Features successfully added."
