@@ -54,7 +54,7 @@ def main():
                 my_logger.info("Error deleting features or no features to delete.")
 
     
-    #function to post the parsed data to the database
+    #function to post the formatted data to the database
     def postData(data, url):
         #send the new data 
         try:
@@ -153,7 +153,9 @@ def main():
             if newGJSON:
                 writeFile("Events.log",newGJSON)
                 postData(newGJSON,url)
-                
+
+
+    ##mainline link feed grabber
     def postMainlines(url):
         #delete old data
         deleteData(url)
@@ -163,8 +165,9 @@ def main():
         if data:
             for road in data:
                 #format json as esri likes
-                newFeat = {"geometry":{"paths":[],"spatialReference":{"wkid":4326}},"attributes": road}
+                newFeat = {"geometry": {"paths": [], "spatialReference": {"wkid":4326}}, "attributes": road}
                 segments = []
+                #interate through the segments of lat/long pairs within each road segment
                 for seg in newFeat["attributes"].pop("SegmentCoordinates"):
                     segment = [round(seg["Longitude"],5),round(seg["Latitude"],5)]
                     segments.append(segment)
@@ -211,12 +214,6 @@ def main():
     formatter = logging.Formatter('%(asctime)s - %(levelname)s - %(message)s',datefmt = '%m/%d/%y %I:%M:%S%p')
     handler.setFormatter(formatter)
     my_logger.addHandler(handler)
-
-
-    try:
-        import requests
-    except:
-        my_logger.info("no requests on server :(")    
         
     #get current data and time for logging purposes 
     dt = datetime.datetime.now()
