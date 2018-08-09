@@ -10,7 +10,7 @@ to_add = config.to_email
 smtp = config.smtp
 
 now = datetime.now()
-one_day = timedelta(1)
+one_day_ago = now - timedelta(1)
 
 def readFile(fileName):
     with open(fileName, 'rb') as f:
@@ -18,16 +18,21 @@ def readFile(fileName):
         error_lines = []
         info_line = ""
         for line in f:
-            words = line.split()
-            date = words[0]+ words[1]
-            date = datetime.strptime(date, "%m/%d/%y %I:%M:%S%p")
-            if date > now - one_day:
-                if "INFO" in line and "features" in line:
-                    info_line = line
-                elif "ERROR" in line:
+            if "ERROR" in line:
+                words = line.split()
+                del words[2:len(words)]
+                date_str = " "
+                date_str.join(words)
+                if date_str == " ":
+                    break
+                date_obj = datetime.strptime(date_str, "%m/%d/%y %I:%M:%S%p")
+                if date_obj >= one_day_ago:
                     error_lines.append(line)
-        for i in range((len(error_lines)-10), len(error_lines)):
-            errors += error_lines[i]
+        if len(error_lines) >= 10:
+            for i in range((len(error_lines)-10), len(error_lines)):
+                errors += error_lines[i]
+        elif error_lines:
+            errors = str(error_lines)
     if errors:
         return errors
     else:
