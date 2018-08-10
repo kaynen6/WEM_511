@@ -22,7 +22,7 @@ def readFile(fileName):
                 words = line.split()
                 del words[2:len(words)]
                 date_str = " "
-                date_str.join(words)
+                date_str = date_str.join(words)
                 if date_str == " ":
                     break
                 date_obj = datetime.strptime(date_str, "%m/%d/%y %I:%M:%S%p")
@@ -30,9 +30,10 @@ def readFile(fileName):
                     error_lines.append(line)
         if len(error_lines) >= 10:
             for i in range((len(error_lines)-10), len(error_lines)):
-                errors += error_lines[i]
+                errors += str(error_lines[i])
         elif error_lines:
-            errors = str(error_lines)
+            for i in range(0, len(error_lines)):
+                errors += str(error_lines[i])
     if errors:
         return errors
     else:
@@ -46,13 +47,16 @@ message = ""
 errors511 = readFile('511.log')
 #add text if errors
 if errors511:
-    message = "Last 10 511 errors logged in the past 24 hours:\n{0}\n".format(errors511)
-
+    message = "511 errors logged in the past 24 hours (showing 10 max):{0}{1}{2}".format("\n",errors511,"\n")
+else:
+    message = "No 511 errors in the past 24 hours.\n"
 #get errors from eaglei.log file
 errors_eaglei = readFile('eaglei.log')
 #add text if errors
 if errors_eaglei:
-    message += "Last 10 Eagle-i errors logged in the past 24 hours:\n{0}".format(errors_eaglei)
+    message += "\nEagle-i errors logged in the past 24 hours (showing 10 max):{0}{1}".format("\n",errors_eaglei)
+else:
+    message += "No Eagle-I errors in the past 24hours."
 
 #send an email if there are errors
 if len(message) > 0:
