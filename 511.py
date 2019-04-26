@@ -12,14 +12,14 @@ except ImportError:
 def main():
     
     #function to retrieve data from urls  
-    def getData(url):
+    def getData(url, feed):
         #get data from url
         try:
             webUrl = urllib2.urlopen(url[0])
         except urllib2.HTTPError as e:
-            my_logger.exception('getData Error:' + str(e.code))
+            my_logger.exception("{0} getData Error: {1}".format(feed,str(e.code)))
         except urllib2.URLError as e:            
-            my_logger.exception('getData Error:' + str(e.reason))
+            my_logger.exception("{0} getData Error: {1}".format(feed,str(e.reason)))
         else:
             code = webUrl.getcode()
             if code == 200:
@@ -27,57 +27,58 @@ def main():
                 try:
                     data = json.load(webUrl)
                 except ValueError as e:
-                    my_logger.exception('getData Error:' + str(e))
+                    my_logger.exception("{0} getData Error: {1}".format(feed,str(e)))
                 return data
             else:
                 data = json.load(webUrl)
                 if "ErrorCode" in data:
-                    my_logger.error(data["ErrorCode"].get("Msg"))
+                    my_logger.error("Error Code in {0} getData: {1}".format(feed, data["ErrorCode"].get("Msg")))
                 return None
         
 
     #function deletes old data on our end first, before adding up-to-date data
-    def deleteData(url):
+    def deleteData(url, feed):
         try: #request to server
             req = urllib2.Request(url[1],'f=json&where=objectid > 0')
             webUrl = urllib2.urlopen(req)
         except urllib2.HTTPError as e:
-            my_logger.exception('deleteData HTTPError: Code' + str(e.code))
+            my_logger.exception("{0} deleteData HTTPError: Code {1}".format(feed,str(e.code)))
         except urllib2.URLError as e: #url error exception handling
-            my_logger.exception('deleteData - URLError:' + str(e.reason))
+            my_logger.exception("{0} deleteData URLError: {1}".format(feed,str(e.reason)))
         else:
             #read response data
             response = json.load(webUrl)
             if response.get("success"): 
-                my_logger.info("Existing features successfully deleted.")
+                my_logger.info("Existing {0} features successfully deleted.".format(feed))
             else:
-                my_logger.info("Error deleting features or no features to delete.")
+                my_logger.info("Error deleting {0} features or no {0} features to delete.".format(feed))
 
     
     #function to post the formatted data to the database
     def postData(data, url):
-        #send the new data 
+        successCount = 0
+        #send the new data
         try:
             req = urllib2.Request(url[2],'f=json&features=' + json.dumps(data, separators=(',', ': ')))
             web_url = urllib2.urlopen(req)
         except urllib2.HTTPError as e:
-            my_logger.exception('postData HTTPError:' + str(e.code))
+            my_logger.exception("{0} postData HTTPError: {1}".format(feed,str(e.code)))
         except urllib2.URLError as e:            
-            my_logger.exception('postData URLError:' + str(e.reason))
+            my_logger.exception("{0} postData URLError {1}".format(feed,str(e.reason)))
         else: #load response data and report
             response = json.load(web_url)
             if response.get("addResults"):
                 for item in response.get("addResults"):
                     if item.get("success") is True:
-                        global successCount
                         successCount += 1
+                return successCount, None
             elif response.get("error"):
                 if response["error"]["details"]:
-                    my_logger.error("Error adding features -" + response["error"].get("message")) #, response["error"].get("details")[0])
+                    return None, response["error"].get("details"[0])
                 elif response["error"]["message"]:
-                    my_logger.error('Error adding features -' + response["error"].get("message"))
+                    return None, response["error"].get("message")
             else:
-                my_logger.error("Unknown Error")
+                return None, "Unknown Error"
 
 
     #dump last request data to log file for debugging help
@@ -87,11 +88,11 @@ def main():
 
       
     #winter road conditions 
-    def postWinterDriving(url):
+    def postWinterDriving(url, feed):
         #delete old data
-        deleteData(url)
+        deleteData(url, feed)
         #get new data from 511
-        data = getData(url)
+        data = getData(url, feed)
         #create new empty geojson for newly formatted data
         newGJSON = []
         #parse and format data correctly for ESRI JSON specs
@@ -112,18 +113,31 @@ def main():
                 newGJSON.append(newFeat)
         #if new data was created, post it to WEM feature service
         if newGJSON:
+            successCount = 0
+            errors = []
             writeFile("WinterDriving.log",newGJSON)
             for feature in newGJSON:
-                postData(feature,url)
-       
+                success, error = postData(feature,url)
+                if success:
+                    successCount = successCount + success
+                if error:
+                    if error not in errors:
+                        errors.append(error)
+            if errors:
+                for e in errors:
+                    my_logger.error("Error adding {0} features - {1}".format(feed, e))
+            if successCount > 0:
+                my_logger.info("{0} {1} features successfully added.".format(str(successCount), feed))
+
+
                 
 
     #function for getEvents feed
-    def postEvents(url):
+    def postEvents(url, feed):
         #delete old data 
-        deleteData(url)
+        deleteData(url, feed)
         #get new data from 511
-        data = getData(url)
+        data = getData(url, feed)
         newGJSON = []
         #the event types from the feed we are interested in:
         eventTypes = ["accidentsAndIncidents", "closures","specialEvents"]
@@ -152,15 +166,18 @@ def main():
             #if new data was created, post it to WEM feature service
             if newGJSON:
                 writeFile("Events.log",newGJSON)
-                postData(newGJSON,url)
-
+                successCount, errors = postData(newGJSON,url)
+                if errors:
+                    my_logger.error("Error adding {0} features - {1}".format(feed, errors))
+                if successCount > 0:
+                    my_logger.info("{0} {1} features successfully added.".format(str(successCount), feed))
 
     ##mainline link feed grabber
-    def postMainlines(url):
+    def postMainlines(url, feed):
         #delete old data
-        deleteData(url)
+        deleteData(url, feed)
         #get new data from 511
-        data = getData(url)
+        data = getData(url, feed)
         newGJSON = []
         if data:
             for road in data:
@@ -173,8 +190,11 @@ def main():
                     segments.append(segment)
                 newFeat["geometry"]["paths"].append(segments)
                 newGJSON.append(newFeat)
-        postData(newGJSON,url)
-
+        successCount, errors = postData(newGJSON,url)
+        if errors:
+            my_logger.error("Error adding {0} features - {1}".format(feed, errors))
+        if successCount > 0:
+            my_logger.info("{0} {1} features successfully added.".format(str(successCount), feed))
 
 
     #function to define variables and start timing for repeating the data retrieval
@@ -192,18 +212,11 @@ def main():
         mainlineUrl = ('https://511wi.gov/web/api/MainlineLinks?key=' + legacy_key + '&format=json',
                        'https://widmamaps.us/dma/rest/services/WEM_Private/511_MainlineLinks/FeatureServer/0/deleteFeatures?token=' + token,
                        'https://widmamaps.us/dma/rest/services/WEM_Private/511_MainlineLinks/FeatureServer/0/addFeatures?token=' + token)
-      
-        #counter for successful items added
-        global successCount
-        successCount = 0
-        
-        #call each function with each url string as the argument
-        postWinterDriving(winterDrivingUrl)
-        postEvents(eventsUrl)
-        postMainlines(mainlineUrl)
 
-        my_logger.info(str(successCount) + " Features successfully added.")
-        print log_time, str(successCount), "Features successfully added."
+        #call each function with each url string as the argument
+        postWinterDriving(winterDrivingUrl, "Winter Driving Conditions")
+        postEvents(eventsUrl, "Events")
+        postMainlines(mainlineUrl, "Mainline Links")
 
 
     #set up a logger
